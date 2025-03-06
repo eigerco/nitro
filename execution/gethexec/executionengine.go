@@ -608,7 +608,7 @@ func (s *ExecutionEngine) sequenceTransactionsWithBlockMutex(header *arbostypes.
 	}
 
 	blockMetadata := s.blockMetadataFromBlock(block, timeboostedTxs)
-	err = s.consensus.WriteMessageFromSequencer(pos, msgWithMeta, *msgResult, blockMetadata)
+	_, err = s.consensus.WriteMessageFromSequencer(pos, msgWithMeta, *msgResult, blockMetadata).Await(s.GetContext())
 	if err != nil {
 		return nil, err
 	}
@@ -684,7 +684,7 @@ func (s *ExecutionEngine) sequenceDelayedMessageWithBlockMutex(message *arbostyp
 		return nil, err
 	}
 
-	err = s.consensus.WriteMessageFromSequencer(pos, messageWithMeta, *msgResult, s.blockMetadataFromBlock(block, nil))
+	_, err = s.consensus.WriteMessageFromSequencer(pos, messageWithMeta, *msgResult, s.blockMetadataFromBlock(block, nil)).Await(s.GetContext())
 	if err != nil {
 		return nil, err
 	}
