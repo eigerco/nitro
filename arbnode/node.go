@@ -46,6 +46,7 @@ import (
 	legacystaker "github.com/offchainlabs/nitro/staker/legacy"
 	multiprotocolstaker "github.com/offchainlabs/nitro/staker/multi_protocol"
 	"github.com/offchainlabs/nitro/staker/validatorwallet"
+	"github.com/offchainlabs/nitro/util/containers"
 	"github.com/offchainlabs/nitro/util/contracts"
 	"github.com/offchainlabs/nitro/util/headerreader"
 	"github.com/offchainlabs/nitro/util/redisutil"
@@ -1520,8 +1521,9 @@ func (n *Node) WriteMessageFromSequencer(pos arbutil.MessageIndex, msgWithMeta a
 	return n.TxStreamer.WriteMessageFromSequencer(pos, msgWithMeta, msgResult, blockMetadata)
 }
 
-func (n *Node) ExpectChosenSequencer() error {
-	return n.TxStreamer.ExpectChosenSequencer()
+func (n *Node) ExpectChosenSequencer() containers.PromiseInterface[struct{}] {
+	err := n.TxStreamer.ExpectChosenSequencer()
+	return containers.NewReadyPromise(struct{}{}, err)
 }
 
 func (n *Node) BlockMetadataAtCount(count arbutil.MessageIndex) (common.BlockMetadata, error) {
