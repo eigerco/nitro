@@ -1533,6 +1533,6 @@ func (n *Node) ExpectChosenSequencer() containers.PromiseInterface[struct{}] {
 	return containers.NewReadyPromise(struct{}{}, err)
 }
 
-func (n *Node) BlockMetadataAtCount(count arbutil.MessageIndex) (common.BlockMetadata, error) {
-	return n.TxStreamer.BlockMetadataAtCount(count)
+func (n *Node) BlockMetadataAtCount(count arbutil.MessageIndex) containers.PromiseInterface[common.BlockMetadata] {
+	return containers.NewReadyPromise(n.TxStreamer.BlockMetadataAtCount(count))
 }
