@@ -33,6 +33,7 @@ import (
 	"github.com/offchainlabs/nitro/util/containers"
 	"github.com/offchainlabs/nitro/util/dbutil"
 	"github.com/offchainlabs/nitro/util/headerreader"
+	"github.com/eigerco/kyc"
 )
 
 type StylusTargetConfig struct {
@@ -221,8 +222,14 @@ func CreateExecutionNode(
 	}
 
 	if config.Sequencer.Enable {
+		// KYC module is initialized here with environment variables
+		kycModule, err := kyc.NewModule()
+		if err != nil {
+			return nil, err
+		}
+
 		seqConfigFetcher := func() *SequencerConfig { return &configFetcher().Sequencer }
-		sequencer, err = NewSequencer(execEngine, parentChainReader, seqConfigFetcher)
+		sequencer, err = NewSequencer(execEngine, parentChainReader, seqConfigFetcher, kycModule)
 		if err != nil {
 			return nil, err
 		}
