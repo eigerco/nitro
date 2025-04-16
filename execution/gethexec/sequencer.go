@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/eigerco/kyc"
 	flag "github.com/spf13/pflag"
 
 	"github.com/ethereum/go-ethereum/arbitrum"
@@ -414,6 +415,8 @@ type Sequencer struct {
 	pauseChan   chan struct{}
 	forwarder   *TxForwarder
 
+	kycModule *kyc.Module
+
 	expectedSurplusMutex              sync.RWMutex
 	expectedSurplus                   int64
 	expectedSurplusUpdated            bool
@@ -421,7 +424,7 @@ type Sequencer struct {
 	timeboostAuctionResolutionTxQueue chan txQueueItem
 }
 
-func NewSequencer(execEngine *ExecutionEngine, l1Reader *headerreader.HeaderReader, configFetcher SequencerConfigFetcher) (*Sequencer, error) {
+func NewSequencer(execEngine *ExecutionEngine, l1Reader *headerreader.HeaderReader, configFetcher SequencerConfigFetcher, kycModule *kyc.Module) (*Sequencer, error) {
 	config := configFetcher()
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -444,6 +447,7 @@ func NewSequencer(execEngine *ExecutionEngine, l1Reader *headerreader.HeaderRead
 		pauseChan:                         nil,
 		onForwarderSet:                    make(chan struct{}, 1),
 		timeboostAuctionResolutionTxQueue: make(chan txQueueItem, 10), // There should never be more than 1 outstanding auction resolutions
+		kycModule:                         kycModule,
 	}
 	s.nonceFailures = &nonceFailureCache{
 		containers.NewLruCacheWithOnEvict(config.NonceCacheSize, s.onNonceFailureEvict),
@@ -637,17 +641,22 @@ func (s *Sequencer) publishTransactionToQueue(queueCtx context.Context, tx *type
 	sequencerBacklogGauge.Inc(1)
 	defer sequencerBacklogGauge.Dec(1)
 
-	if len(s.senderWhitelist) > 0 {
-		signer := types.LatestSigner(s.execEngine.bc.Config())
-		sender, err := types.Sender(signer, tx)
-		if err != nil {
-			return err
-		}
-		_, authorized := s.senderWhitelist[sender]
-		if !authorized {
-			return errors.New("transaction sender is not on the whitelist")
-		}
-	}
+	// WARNING: This code is deliberately disabled at this point as we're not using sender whitelist to block all transactions if they are not whitelisted
+	// but instead, we're using the sender whitelist to allow specific addresses to send transactions in conjuction with KYC module.
+	// That being said, it's like this: Initially contract is deployed but will be rejected by the KYC. SenderWhitelist is changed so we can allow the contract to be deployed
+	// and any other transactions without KYC rejecting them.
+	// if len(s.senderWhitelist) > 0 {
+	// 	signer := types.LatestSigner(s.execEngine.bc.Config())
+	// 	sender, err := types.Sender(signer, tx)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	_, authorized := s.senderWhitelist[sender]
+	// 	if !authorized {
+	// 		return errors.New("transaction sender is not on the whitelist")
+	// 	}
+	// }
+
 	if tx.Type() >= types.ArbitrumDepositTxType || tx.Type() == types.BlobTxType {
 		// Should be unreachable for Arbitrum types due to UnmarshalBinary not accepting Arbitrum internal txs
 		// and we want to disallow BlobTxType since Arbitrum doesn't support EIP-4844 txs yet.
@@ -707,6 +716,17 @@ func (s *Sequencer) preTxFilter(_ *params.ChainConfig, header *types.Header, sta
 		}
 		conditionalTxAcceptedBySequencerCounter.Inc(1)
 	}
+
+	if s.kycModule != nil {
+		// This is the deal. If sender is not whitelisted, check if it's authorized by KYC.
+		// This makes things a bit nicer and allows us to deploy the contract even if sender is not whitelisted via the KYC.
+		if _, whitelisted := s.senderWhitelist[sender]; !whitelisted {
+			if !s.kycModule.IsSenderAuthorized(sender) {
+				return errors.New("transaction sender is not authorized")
+			}
+		}
+	}
+
 	return nil
 }
 
