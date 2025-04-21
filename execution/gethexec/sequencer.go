@@ -585,7 +585,7 @@ func (s *Sequencer) PublishAuctionResolutionTransaction(ctx context.Context, tx 
 		returnedResult:  &atomic.Bool{},
 		ctx:             s.GetContext(),
 		firstAppearance: time.Now(),
-		isTimeboosted:   true,
+		isTimeboosted:   false,
 	}
 	return nil
 }
